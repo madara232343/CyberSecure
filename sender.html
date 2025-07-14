@@ -1,0 +1,323 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>CyberSecure Messenger</title>
+  <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
+  <link href="https://fonts.googleapis.com/css2?family=Orbitron:wght@600&display=swap" rel="stylesheet">
+  <style>
+    html, body {
+      margin: 0;
+      padding: 0;
+      font-family: 'Orbitron', sans-serif;
+      background: #050510;
+      color: #00ffe0;
+      height: 100%;
+      overflow-x: hidden;
+    }
+
+    canvas#bg {
+      position: fixed;
+      top: 0;
+      left: 0;
+      z-index: 0;
+      width: 100%;
+      height: 100%;
+    }
+
+    .glow-grid {
+      position: fixed;
+      top: 0;
+      left: 0;
+      width: 100%;
+      height: 100%;
+      background-image:
+        radial-gradient(rgba(0, 255, 170, 0.07) 1px, transparent 1px),
+        radial-gradient(rgba(0, 255, 255, 0.04) 1px, transparent 1px);
+      background-size: 30px 30px;
+      z-index: 1;
+      pointer-events: none;
+    }
+
+    .container {
+      max-width: 960px;
+      margin: 80px auto;
+      padding: 40px 20px;
+      background: rgba(0, 0, 0, 0.85);
+      border: 2px solid #00ffe0;
+      border-radius: 20px;
+      box-shadow: 0 0 40px #00ffe0;
+      position: relative;
+      z-index: 2;
+    }
+
+    h2 {
+      text-align: center;
+      font-size: 2.2rem;
+      color: #00ffee;
+      text-shadow: 0 0 10px #00ffe0, 0 0 20px #00ffee;
+      animation: flicker 2s infinite alternate;
+    }
+
+    @keyframes flicker {
+      0%, 100% { opacity: 1; }
+      50% { opacity: 0.8; text-shadow: 0 0 5px #00ffee, 0 0 10px #00ffe0; }
+    }
+
+    .form-label, .section-title {
+      color: #00ffcc;
+      font-size: 16px;
+      margin-top: 20px;
+    }
+
+    textarea, pre {
+      background-color: #0a0a0a;
+      color: #00ffb3;
+      border: 2px solid #00ffe0;
+      border-radius: 12px;
+      padding: 15px;
+      font-family: monospace;
+      font-size: 14px;
+      box-shadow: 0 0 10px #00ffe0;
+      width: 100%;
+    }
+
+    pre {
+      white-space: pre-wrap;
+      word-break: break-word;
+    }
+
+    .btn-custom {
+      min-width: 180px;
+      font-size: 16px;
+      font-weight: bold;
+      color: #000;
+      background: #00ffe0;
+      border: none;
+      border-radius: 10px;
+      transition: all 0.3s ease-in-out;
+      box-shadow: 0 0 12px #00ffe0;
+    }
+
+    .btn-custom:hover {
+      background: #00d6b8;
+      box-shadow: 0 0 15px #00ffee, 0 0 25px #00ffee;
+      transform: scale(1.05);
+    }
+
+    .btn-group-custom {
+      display: flex;
+      gap: 20px;
+      justify-content: center;
+      flex-wrap: wrap;
+      margin-top: 25px;
+      margin-bottom: 30px;
+    }
+
+    footer {
+      text-align: center;
+      margin-top: 30px;
+      color: #999;
+      font-size: 13px;
+    }
+
+    ::selection {
+      background: #00ffe0;
+      color: #000;
+    }
+
+    a {
+      color: #00ffee;
+      text-decoration: underline;
+      cursor: pointer;
+    }
+
+    @media (max-width: 576px) {
+      .btn-custom {
+        width: 100%;
+      }
+
+      .container {
+        padding: 20px 15px;
+        margin: 40px 10px;
+      }
+
+      h2 {
+        font-size: 1.6rem;
+      }
+    }
+
+    .hidden { display: none; }
+  </style>
+</head>
+<body>
+<canvas id="bg"></canvas>
+<div class="glow-grid"></div>
+
+<div class="container">
+  <div id="encryptPage">
+    <h2>🛡️ CyberSecure Messenger</h2>
+
+    <label for="message" class="form-label">📨 Message to Encrypt</label>
+    <textarea id="message" rows="4" placeholder="Type your secret..."></textarea>
+
+    <div class="btn-group-custom">
+      <button class="btn btn-custom" onclick="encryptAndSend()">Encrypt & Copy</button>
+      <button class="btn btn-custom" onclick="clearFields()">Clear</button>
+      <a onclick="showPage('decryptPage')">🔓 Decrypt from Encrypted Message</a>
+    </div>
+
+    <div>
+      <div class="section-title">📦 Encrypted JSON Payload</div>
+      <pre id="encryptedOutput">Waiting for encryption...</pre>
+    </div>
+  </div>
+
+  <div id="decryptPage" class="hidden">
+    <h2>🔓 Paste Encrypted Message</h2>
+
+    <label class="form-label">📋 Encrypted JSON Message</label>
+    <textarea id="pastedMessage" rows="8" placeholder="Paste encrypted message here..."></textarea>
+
+    <div class="btn-group-custom">
+      <button class="btn btn-custom" onclick="pasteAndDecrypt()">Decrypt</button>
+      <a onclick="showPage('encryptPage')">🔁 Back to Encrypt</a>
+    </div>
+
+    <div>
+      <div class="section-title">📖 Decrypted Message</div>
+      <pre id="decryptedPastedOutput">Waiting for decryption...</pre>
+    </div>
+  </div>
+
+  <footer>
+    &copy; 2025 CyberSecure | AES-256 + RSA-4096 | Web Crypto API | Raval Dhwanil 😎
+  </footer>
+</div>
+
+<script>
+let receiverKeys;
+
+(async () => {
+  receiverKeys = await crypto.subtle.generateKey({
+    name: "RSA-OAEP",
+    modulusLength: 4096,
+    publicExponent: new Uint8Array([1, 0, 1]),
+    hash: "SHA-256"
+  }, true, ["encrypt", "decrypt"]);
+})();
+
+function bufToB64(buf) {
+  return btoa(String.fromCharCode(...new Uint8Array(buf)));
+}
+
+function b64ToBuf(b64) {
+  return Uint8Array.from(atob(b64), c => c.charCodeAt(0));
+}
+
+async function encryptAndSend() {
+  const message = document.getElementById("message").value;
+  if (!message) return alert("Enter a message first.");
+
+  const aesKey = await crypto.subtle.generateKey(
+    { name: "AES-GCM", length: 256 },
+    true,
+    ["encrypt", "decrypt"]
+  );
+  const iv = crypto.getRandomValues(new Uint8Array(12));
+  const encoded = new TextEncoder().encode(message);
+  const ciphertext = await crypto.subtle.encrypt({ name: "AES-GCM", iv }, aesKey, encoded);
+  const rawKey = await crypto.subtle.exportKey("raw", aesKey);
+  const encryptedKey = await crypto.subtle.encrypt(
+    { name: "RSA-OAEP" },
+    receiverKeys.publicKey,
+    rawKey
+  );
+
+  const output = {
+    ciphertext: bufToB64(ciphertext),
+    encryptedKey: bufToB64(encryptedKey),
+    iv: bufToB64(iv)
+  };
+
+  const outputString = JSON.stringify(output, null, 2);
+  document.getElementById("encryptedOutput").textContent = outputString;
+
+  navigator.clipboard.writeText(outputString).then(() => {
+    alert("Encrypted message copied to clipboard!");
+  });
+}
+
+async function pasteAndDecrypt() {
+  const input = document.getElementById("pastedMessage").value;
+  try {
+    const { ciphertext, encryptedKey, iv } = JSON.parse(input);
+    const rawKey = await crypto.subtle.decrypt(
+      { name: "RSA-OAEP" },
+      receiverKeys.privateKey,
+      b64ToBuf(encryptedKey)
+    );
+    const aesKey = await crypto.subtle.importKey("raw", rawKey, { name: "AES-GCM" }, true, ["decrypt"]);
+    const decrypted = await crypto.subtle.decrypt(
+      { name: "AES-GCM", iv: b64ToBuf(iv) },
+      aesKey,
+      b64ToBuf(ciphertext)
+    );
+    document.getElementById("decryptedPastedOutput").textContent = new TextDecoder().decode(decrypted);
+  } catch (e) {
+    document.getElementById("decryptedPastedOutput").textContent = "❌ Decryption failed. Check the format.";
+  }
+}
+
+function clearFields() {
+  document.getElementById("message").value = "";
+  document.getElementById("encryptedOutput").textContent = "Waiting for encryption...";
+}
+
+function showPage(pageId) {
+  document.getElementById("encryptPage").classList.add("hidden");
+  document.getElementById("decryptPage").classList.add("hidden");
+  document.getElementById(pageId).classList.remove("hidden");
+}
+
+// === Background animation ===
+const canvas = document.getElementById('bg');
+const ctx = canvas.getContext('2d');
+canvas.width = window.innerWidth;
+canvas.height = window.innerHeight;
+
+let particles = [];
+for (let i = 0; i < 120; i++) {
+  particles.push({
+    x: Math.random() * canvas.width,
+    y: Math.random() * canvas.height,
+    r: Math.random() * 2 + 1,
+    dx: Math.random() * 0.6 - 0.3,
+    dy: Math.random() * 0.6 - 0.3
+  });
+}
+
+function animate() {
+  ctx.clearRect(0, 0, canvas.width, canvas.height);
+  for (let p of particles) {
+    ctx.beginPath();
+    ctx.arc(p.x, p.y, p.r, 0, Math.PI * 2);
+    ctx.fillStyle = 'rgba(0,255,255,0.6)';
+    ctx.fill();
+    p.x += p.dx;
+    p.y += p.dy;
+    if (p.x < 0 || p.x > canvas.width) p.dx *= -1;
+    if (p.y < 0 || p.y > canvas.height) p.dy *= -1;
+  }
+  requestAnimationFrame(animate);
+}
+animate();
+
+window.addEventListener("resize", () => {
+  canvas.width = window.innerWidth;
+  canvas.height = window.innerHeight;
+});
+</script>
+</body>
+</html>
