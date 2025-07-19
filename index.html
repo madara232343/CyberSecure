@@ -1,4 +1,3 @@
-<!-- Final CyberSecure Messenger HTML -->
 <!DOCTYPE html>
 <html lang="en">
 <head>
@@ -119,12 +118,13 @@
       text-decoration: underline;
       cursor: pointer;
     }
+    .hidden { display: none; }
+
     @media (max-width: 576px) {
       .btn-custom { width: 100%; }
       .container { padding: 20px 15px; margin: 40px 10px; }
       h2 { font-size: 1.6rem; }
     }
-    .hidden { display: none; }
   </style>
 </head>
 <body>
@@ -144,15 +144,12 @@
       <a onclick="showPage('decryptPage')">🔓 Decrypt from Encrypted Message</a>
     </div>
 
-    <div class="section-title">📦 Encrypted JSON Payload</div>
-    <pre id="encryptedOutput">Waiting for encryption...</pre>
-
-    <div class="section-title">🔐 Export / Import RSA Keys</div>
-    <div class="btn-group-custom">
-      <button class="btn btn-custom" onclick="exportKeys()">Export RSA Keys</button>
-      <button class="btn btn-custom" onclick="importKeysPrompt()">Import RSA Keys</button>
+    <div>
+      <div class="section-title">📦 Encrypted JSON Payload</div>
+      <pre id="encryptedOutput">Waiting for encryption...</pre>
+      <div class="section-title">🔑 Private Key (Keep safe)</div>
+      <pre id="privateKeyOutput">Generated when encrypted</pre>
     </div>
-    <textarea id="rsaKeysBox" rows="6" placeholder="Exported RSA keys will appear here or paste keys here to import..."></textarea>
   </div>
 
   <div id="decryptPage" class="hidden">
@@ -161,14 +158,19 @@
     <label class="form-label">📋 Encrypted JSON Message</label>
     <textarea id="pastedMessage" rows="8" placeholder="Paste encrypted message here..."></textarea>
 
+    <label class="form-label">🔐 Private Key (JWK format)</label>
+    <textarea id="pastedPrivateKey" rows="6" placeholder="Paste private key here..."></textarea>
+
     <div class="btn-group-custom">
       <button class="btn btn-custom" onclick="pasteAndDecrypt()">Decrypt</button>
       <button class="btn btn-custom" onclick="clearDecryptionFields()">Clear</button>
       <a onclick="showPage('encryptPage')">🔁 Back to Encrypt</a>
     </div>
 
-    <div class="section-title">📖 Decrypted Message</div>
-    <pre id="decryptedPastedOutput">Waiting for decryption...</pre>
+    <div>
+      <div class="section-title">📖 Decrypted Message</div>
+      <pre id="decryptedPastedOutput">Waiting for decryption...</pre>
+    </div>
   </div>
 
   <footer>
@@ -177,31 +179,26 @@
 </div>
 
 <script>
-let receiverKeys;
-
-(async () => {
-  const savedKeys = localStorage.getItem("cybersecure_keys");
-  if (savedKeys) {
-    const { publicKey, privateKey } = JSON.parse(savedKeys);
-    receiverKeys = {
-      publicKey: await crypto.subtle.importKey("spki", b64ToBuf(publicKey), { name: "RSA-OAEP", hash: "SHA-256" }, true, ["encrypt"]),
-      privateKey: await crypto.subtle.importKey("pkcs8", b64ToBuf(privateKey), { name: "RSA-OAEP", hash: "SHA-256" }, true, ["decrypt"]),
-    };
-  } else {
-    receiverKeys = await crypto.subtle.generateKey({ name: "RSA-OAEP", modulusLength: 4096, publicExponent: new Uint8Array([1, 0, 1]), hash: "SHA-256" }, true, ["encrypt", "decrypt"]);
-    const exported = {
-      publicKey: bufToB64(await crypto.subtle.exportKey("spki", receiverKeys.publicKey)),
-      privateKey: bufToB64(await crypto.subtle.exportKey("pkcs8", receiverKeys.privateKey))
-    };
-    localStorage.setItem("cybersecure_keys", JSON.stringify(exported));
-  }
-})();
+let privateKey = null;
 
 function bufToB64(buf) {
   return btoa(String.fromCharCode(...new Uint8Array(buf)));
 }
+
 function b64ToBuf(b64) {
   return Uint8Array.from(atob(b64), c => c.charCodeAt(0));
+}
+
+function clearFields() {
+  document.getElementById("message").value = "";
+  document.getElementById("encryptedOutput").textContent = "Waiting for encryption...";
+  document.getElementById("privateKeyOutput").textContent = "Generated when encrypted";
+}
+
+function clearDecryptionFields() {
+  document.getElementById("pastedMessage").value = "";
+  document.getElementById("pastedPrivateKey").value = "";
+  document.getElementById("decryptedPastedOutput").textContent = "Waiting for decryption...";
 }
 
 function showPage(id) {
@@ -210,91 +207,87 @@ function showPage(id) {
   document.getElementById(id).classList.remove("hidden");
 }
 
-function clearFields() {
-  document.getElementById("message").value = "";
-  document.getElementById("encryptedOutput").textContent = "Waiting for encryption...";
-}
-function clearDecryptionFields() {
-  document.getElementById("pastedMessage").value = "";
-  document.getElementById("decryptedPastedOutput").textContent = "Waiting for decryption...";
-}
-
 async function encryptAndSend() {
-  const message = document.getElementById("message").value;
-  if (!message) return alert("Enter a message first.");
+  const msg = document.getElementById("message").value;
+  if (!msg) return alert("Type a message first.");
+
+  const rsaKeys = await crypto.subtle.generateKey({
+    name: "RSA-OAEP",
+    modulusLength: 4096,
+    publicExponent: new Uint8Array([1, 0, 1]),
+    hash: "SHA-256"
+  }, true, ["encrypt", "decrypt"]);
+
+  privateKey = rsaKeys.privateKey;
+
+  const pubKey = rsaKeys.publicKey;
 
   const aesKey = await crypto.subtle.generateKey({ name: "AES-GCM", length: 256 }, true, ["encrypt", "decrypt"]);
   const iv = crypto.getRandomValues(new Uint8Array(12));
-  const encoded = new TextEncoder().encode(message);
-  const ciphertext = await crypto.subtle.encrypt({ name: "AES-GCM", iv }, aesKey, encoded);
+  const ciphertext = await crypto.subtle.encrypt({ name: "AES-GCM", iv }, aesKey, new TextEncoder().encode(msg));
   const rawKey = await crypto.subtle.exportKey("raw", aesKey);
-  const encryptedKey = await crypto.subtle.encrypt({ name: "RSA-OAEP" }, receiverKeys.publicKey, rawKey);
+  const encryptedKey = await crypto.subtle.encrypt({ name: "RSA-OAEP" }, pubKey, rawKey);
 
-  const output = {
+  const privateJWK = await crypto.subtle.exportKey("jwk", privateKey);
+
+  const payload = {
     ciphertext: bufToB64(ciphertext),
     encryptedKey: bufToB64(encryptedKey),
     iv: bufToB64(iv)
   };
 
-  const outputString = JSON.stringify(output, null, 2);
-  document.getElementById("encryptedOutput").textContent = outputString;
+  const output = JSON.stringify(payload, null, 2);
+  const keyText = JSON.stringify(privateJWK, null, 2);
+
+  document.getElementById("encryptedOutput").textContent = output;
+  document.getElementById("privateKeyOutput").textContent = keyText;
+
   try {
-    await navigator.clipboard.writeText(outputString);
-    alert("✅ Encrypted message copied to clipboard!");
-  } catch (err) {
-    alert("❌ Failed to copy. Please copy manually.");
+    await navigator.clipboard.writeText(output);
+    alert("✅ Encrypted message copied!");
+  } catch (e) {
+    alert("❌ Could not copy. Please copy manually.");
   }
 }
 
 async function pasteAndDecrypt() {
-  const input = document.getElementById("pastedMessage").value;
   try {
-    const { ciphertext, encryptedKey, iv } = JSON.parse(input);
-    const rawKey = await crypto.subtle.decrypt({ name: "RSA-OAEP" }, receiverKeys.privateKey, b64ToBuf(encryptedKey));
-    const aesKey = await crypto.subtle.importKey("raw", rawKey, { name: "AES-GCM" }, true, ["decrypt"]);
-    const decrypted = await crypto.subtle.decrypt({ name: "AES-GCM", iv: b64ToBuf(iv) }, aesKey, b64ToBuf(ciphertext));
+    const json = JSON.parse(document.getElementById("pastedMessage").value);
+    const privateJWK = JSON.parse(document.getElementById("pastedPrivateKey").value);
+
+    const importedPriv = await crypto.subtle.importKey(
+      "jwk", privateJWK, { name: "RSA-OAEP", hash: "SHA-256" }, false, ["decrypt"]
+    );
+
+    const rawKey = await crypto.subtle.decrypt(
+      { name: "RSA-OAEP" }, importedPriv, b64ToBuf(json.encryptedKey)
+    );
+
+    const aesKey = await crypto.subtle.importKey("raw", rawKey, { name: "AES-GCM" }, false, ["decrypt"]);
+    const decrypted = await crypto.subtle.decrypt({ name: "AES-GCM", iv: b64ToBuf(json.iv) }, aesKey, b64ToBuf(json.ciphertext));
+
     document.getElementById("decryptedPastedOutput").textContent = new TextDecoder().decode(decrypted);
   } catch (e) {
     console.error(e);
-    document.getElementById("decryptedPastedOutput").textContent = "❌ Decryption failed. Check the format or RSA keys.";
+    document.getElementById("decryptedPastedOutput").textContent = "❌ Decryption failed. Check the format or key.";
   }
 }
 
-async function exportKeys() {
-  const pub = await crypto.subtle.exportKey("spki", receiverKeys.publicKey);
-  const priv = await crypto.subtle.exportKey("pkcs8", receiverKeys.privateKey);
-  document.getElementById("rsaKeysBox").value = JSON.stringify({
-    publicKey: bufToB64(pub),
-    privateKey: bufToB64(priv)
-  }, null, 2);
-}
-
-async function importKeysPrompt() {
-  try {
-    const raw = JSON.parse(document.getElementById("rsaKeysBox").value);
-    const pub = await crypto.subtle.importKey("spki", b64ToBuf(raw.publicKey), { name: "RSA-OAEP", hash: "SHA-256" }, true, ["encrypt"]);
-    const priv = await crypto.subtle.importKey("pkcs8", b64ToBuf(raw.privateKey), { name: "RSA-OAEP", hash: "SHA-256" }, true, ["decrypt"]);
-    receiverKeys = { publicKey: pub, privateKey: priv };
-    localStorage.setItem("cybersecure_keys", JSON.stringify(raw));
-    alert("🔐 RSA Keys imported successfully!");
-  } catch (err) {
-    alert("❌ Invalid key format. Check again.");
-  }
-}
-
-// Particle animation background
 const canvas = document.getElementById('bg');
 const ctx = canvas.getContext('2d');
 canvas.width = window.innerWidth;
 canvas.height = window.innerHeight;
 
-let particles = Array.from({ length: 120 }, () => ({
-  x: Math.random() * canvas.width,
-  y: Math.random() * canvas.height,
-  r: Math.random() * 2 + 1,
-  dx: Math.random() * 0.6 - 0.3,
-  dy: Math.random() * 0.6 - 0.3
-}));
+let particles = [];
+for (let i = 0; i < 120; i++) {
+  particles.push({
+    x: Math.random() * canvas.width,
+    y: Math.random() * canvas.height,
+    r: Math.random() * 2 + 1,
+    dx: Math.random() * 0.6 - 0.3,
+    dy: Math.random() * 0.6 - 0.3
+  });
+}
 
 function animate() {
   ctx.clearRect(0, 0, canvas.width, canvas.height);
@@ -311,6 +304,7 @@ function animate() {
   requestAnimationFrame(animate);
 }
 animate();
+
 window.addEventListener("resize", () => {
   canvas.width = window.innerWidth;
   canvas.height = window.innerHeight;
