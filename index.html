@@ -1,3 +1,4 @@
+<!-- Final CyberSecure Messenger HTML -->
 <!DOCTYPE html>
 <html lang="en">
 <head>
@@ -16,7 +17,6 @@
       height: 100%;
       overflow-x: hidden;
     }
-
     canvas#bg {
       position: fixed;
       top: 0;
@@ -25,7 +25,6 @@
       width: 100%;
       height: 100%;
     }
-
     .glow-grid {
       position: fixed;
       top: 0;
@@ -39,7 +38,6 @@
       z-index: 1;
       pointer-events: none;
     }
-
     .container {
       max-width: 960px;
       margin: 80px auto;
@@ -51,7 +49,6 @@
       position: relative;
       z-index: 2;
     }
-
     h2 {
       text-align: center;
       font-size: 2.2rem;
@@ -59,18 +56,15 @@
       text-shadow: 0 0 10px #00ffe0, 0 0 20px #00ffee;
       animation: flicker 2s infinite alternate;
     }
-
     @keyframes flicker {
       0%, 100% { opacity: 1; }
       50% { opacity: 0.8; text-shadow: 0 0 5px #00ffee, 0 0 10px #00ffe0; }
     }
-
     .form-label, .section-title {
       color: #00ffcc;
       font-size: 16px;
       margin-top: 20px;
     }
-
     textarea, pre {
       background-color: #0a0a0a;
       color: #00ffb3;
@@ -82,12 +76,10 @@
       box-shadow: 0 0 10px #00ffe0;
       width: 100%;
     }
-
     pre {
       white-space: pre-wrap;
       word-break: break-word;
     }
-
     .btn-custom {
       min-width: 180px;
       font-size: 16px;
@@ -99,13 +91,11 @@
       transition: all 0.3s ease-in-out;
       box-shadow: 0 0 12px #00ffe0;
     }
-
     .btn-custom:hover {
       background: #00d6b8;
       box-shadow: 0 0 15px #00ffee, 0 0 25px #00ffee;
       transform: scale(1.05);
     }
-
     .btn-group-custom {
       display: flex;
       gap: 20px;
@@ -114,40 +104,26 @@
       margin-top: 25px;
       margin-bottom: 30px;
     }
-
     footer {
       text-align: center;
       margin-top: 30px;
       color: #999;
       font-size: 13px;
     }
-
     ::selection {
       background: #00ffe0;
       color: #000;
     }
-
     a {
       color: #00ffee;
       text-decoration: underline;
       cursor: pointer;
     }
-
     @media (max-width: 576px) {
-      .btn-custom {
-        width: 100%;
-      }
-
-      .container {
-        padding: 20px 15px;
-        margin: 40px 10px;
-      }
-
-      h2 {
-        font-size: 1.6rem;
-      }
+      .btn-custom { width: 100%; }
+      .container { padding: 20px 15px; margin: 40px 10px; }
+      h2 { font-size: 1.6rem; }
     }
-
     .hidden { display: none; }
   </style>
 </head>
@@ -168,10 +144,15 @@
       <a onclick="showPage('decryptPage')">🔓 Decrypt from Encrypted Message</a>
     </div>
 
-    <div>
-      <div class="section-title">📦 Encrypted JSON Payload</div>
-      <pre id="encryptedOutput">Waiting for encryption...</pre>
+    <div class="section-title">📦 Encrypted JSON Payload</div>
+    <pre id="encryptedOutput">Waiting for encryption...</pre>
+
+    <div class="section-title">🔐 Export / Import RSA Keys</div>
+    <div class="btn-group-custom">
+      <button class="btn btn-custom" onclick="exportKeys()">Export RSA Keys</button>
+      <button class="btn btn-custom" onclick="importKeysPrompt()">Import RSA Keys</button>
     </div>
+    <textarea id="rsaKeysBox" rows="6" placeholder="Exported RSA keys will appear here or paste keys here to import..."></textarea>
   </div>
 
   <div id="decryptPage" class="hidden">
@@ -186,10 +167,8 @@
       <a onclick="showPage('encryptPage')">🔁 Back to Encrypt</a>
     </div>
 
-    <div>
-      <div class="section-title">📖 Decrypted Message</div>
-      <pre id="decryptedPastedOutput">Waiting for decryption...</pre>
-    </div>
+    <div class="section-title">📖 Decrypted Message</div>
+    <pre id="decryptedPastedOutput">Waiting for decryption...</pre>
   </div>
 
   <footer>
@@ -198,56 +177,46 @@
 </div>
 
 <script>
-let receiverKeys = {};
+let receiverKeys;
+
+(async () => {
+  const savedKeys = localStorage.getItem("cybersecure_keys");
+  if (savedKeys) {
+    const { publicKey, privateKey } = JSON.parse(savedKeys);
+    receiverKeys = {
+      publicKey: await crypto.subtle.importKey("spki", b64ToBuf(publicKey), { name: "RSA-OAEP", hash: "SHA-256" }, true, ["encrypt"]),
+      privateKey: await crypto.subtle.importKey("pkcs8", b64ToBuf(privateKey), { name: "RSA-OAEP", hash: "SHA-256" }, true, ["decrypt"]),
+    };
+  } else {
+    receiverKeys = await crypto.subtle.generateKey({ name: "RSA-OAEP", modulusLength: 4096, publicExponent: new Uint8Array([1, 0, 1]), hash: "SHA-256" }, true, ["encrypt", "decrypt"]);
+    const exported = {
+      publicKey: bufToB64(await crypto.subtle.exportKey("spki", receiverKeys.publicKey)),
+      privateKey: bufToB64(await crypto.subtle.exportKey("pkcs8", receiverKeys.privateKey))
+    };
+    localStorage.setItem("cybersecure_keys", JSON.stringify(exported));
+  }
+})();
 
 function bufToB64(buf) {
   return btoa(String.fromCharCode(...new Uint8Array(buf)));
 }
-
 function b64ToBuf(b64) {
   return Uint8Array.from(atob(b64), c => c.charCodeAt(0));
 }
 
-async function generateKeys() {
-  receiverKeys = await crypto.subtle.generateKey({
-    name: "RSA-OAEP",
-    modulusLength: 4096,
-    publicExponent: new Uint8Array([1, 0, 1]),
-    hash: "SHA-256"
-  }, true, ["encrypt", "decrypt"]);
-  const pub = await crypto.subtle.exportKey("spki", receiverKeys.publicKey);
-  const priv = await crypto.subtle.exportKey("pkcs8", receiverKeys.privateKey);
-  localStorage.setItem("cybersecure_pub", bufToB64(pub));
-  localStorage.setItem("cybersecure_priv", bufToB64(priv));
+function showPage(id) {
+  document.getElementById("encryptPage").classList.add("hidden");
+  document.getElementById("decryptPage").classList.add("hidden");
+  document.getElementById(id).classList.remove("hidden");
 }
-
-async function loadKeys() {
-  const pub = localStorage.getItem("cybersecure_pub");
-  const priv = localStorage.getItem("cybersecure_priv");
-  if (!pub || !priv) {
-    await generateKeys();
-    return;
-  }
-  receiverKeys.publicKey = await crypto.subtle.importKey("spki", b64ToBuf(pub), { name: "RSA-OAEP", hash: "SHA-256" }, true, ["encrypt"]);
-  receiverKeys.privateKey = await crypto.subtle.importKey("pkcs8", b64ToBuf(priv), { name: "RSA-OAEP", hash: "SHA-256" }, true, ["decrypt"]);
-}
-
-loadKeys();
 
 function clearFields() {
   document.getElementById("message").value = "";
   document.getElementById("encryptedOutput").textContent = "Waiting for encryption...";
 }
-
 function clearDecryptionFields() {
   document.getElementById("pastedMessage").value = "";
   document.getElementById("decryptedPastedOutput").textContent = "Waiting for decryption...";
-}
-
-function showPage(pageId) {
-  document.getElementById("encryptPage").classList.add("hidden");
-  document.getElementById("decryptPage").classList.add("hidden");
-  document.getElementById(pageId).classList.remove("hidden");
 }
 
 async function encryptAndSend() {
@@ -269,7 +238,6 @@ async function encryptAndSend() {
 
   const outputString = JSON.stringify(output, null, 2);
   document.getElementById("encryptedOutput").textContent = outputString;
-
   try {
     await navigator.clipboard.writeText(outputString);
     alert("✅ Encrypted message copied to clipboard!");
@@ -288,25 +256,45 @@ async function pasteAndDecrypt() {
     document.getElementById("decryptedPastedOutput").textContent = new TextDecoder().decode(decrypted);
   } catch (e) {
     console.error(e);
-    document.getElementById("decryptedPastedOutput").textContent = "❌ Decryption failed. Check the format.";
+    document.getElementById("decryptedPastedOutput").textContent = "❌ Decryption failed. Check the format or RSA keys.";
   }
 }
 
+async function exportKeys() {
+  const pub = await crypto.subtle.exportKey("spki", receiverKeys.publicKey);
+  const priv = await crypto.subtle.exportKey("pkcs8", receiverKeys.privateKey);
+  document.getElementById("rsaKeysBox").value = JSON.stringify({
+    publicKey: bufToB64(pub),
+    privateKey: bufToB64(priv)
+  }, null, 2);
+}
+
+async function importKeysPrompt() {
+  try {
+    const raw = JSON.parse(document.getElementById("rsaKeysBox").value);
+    const pub = await crypto.subtle.importKey("spki", b64ToBuf(raw.publicKey), { name: "RSA-OAEP", hash: "SHA-256" }, true, ["encrypt"]);
+    const priv = await crypto.subtle.importKey("pkcs8", b64ToBuf(raw.privateKey), { name: "RSA-OAEP", hash: "SHA-256" }, true, ["decrypt"]);
+    receiverKeys = { publicKey: pub, privateKey: priv };
+    localStorage.setItem("cybersecure_keys", JSON.stringify(raw));
+    alert("🔐 RSA Keys imported successfully!");
+  } catch (err) {
+    alert("❌ Invalid key format. Check again.");
+  }
+}
+
+// Particle animation background
 const canvas = document.getElementById('bg');
 const ctx = canvas.getContext('2d');
 canvas.width = window.innerWidth;
 canvas.height = window.innerHeight;
 
-let particles = [];
-for (let i = 0; i < 120; i++) {
-  particles.push({
-    x: Math.random() * canvas.width,
-    y: Math.random() * canvas.height,
-    r: Math.random() * 2 + 1,
-    dx: Math.random() * 0.6 - 0.3,
-    dy: Math.random() * 0.6 - 0.3
-  });
-}
+let particles = Array.from({ length: 120 }, () => ({
+  x: Math.random() * canvas.width,
+  y: Math.random() * canvas.height,
+  r: Math.random() * 2 + 1,
+  dx: Math.random() * 0.6 - 0.3,
+  dy: Math.random() * 0.6 - 0.3
+}));
 
 function animate() {
   ctx.clearRect(0, 0, canvas.width, canvas.height);
@@ -322,9 +310,7 @@ function animate() {
   }
   requestAnimationFrame(animate);
 }
-
 animate();
-
 window.addEventListener("resize", () => {
   canvas.width = window.innerWidth;
   canvas.height = window.innerHeight;
