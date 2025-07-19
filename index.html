@@ -16,7 +16,6 @@
       height: 100%;
       overflow-x: hidden;
     }
-
     canvas#bg {
       position: fixed;
       top: 0;
@@ -25,7 +24,6 @@
       width: 100%;
       height: 100%;
     }
-
     .glow-grid {
       position: fixed;
       top: 0;
@@ -39,7 +37,6 @@
       z-index: 1;
       pointer-events: none;
     }
-
     .container {
       max-width: 960px;
       margin: 80px auto;
@@ -51,7 +48,6 @@
       position: relative;
       z-index: 2;
     }
-
     h2 {
       text-align: center;
       font-size: 2.2rem;
@@ -59,18 +55,15 @@
       text-shadow: 0 0 10px #00ffe0, 0 0 20px #00ffee;
       animation: flicker 2s infinite alternate;
     }
-
     @keyframes flicker {
       0%, 100% { opacity: 1; }
       50% { opacity: 0.8; text-shadow: 0 0 5px #00ffee, 0 0 10px #00ffe0; }
     }
-
     .form-label, .section-title {
       color: #00ffcc;
       font-size: 16px;
       margin-top: 20px;
     }
-
     textarea, pre {
       background-color: #0a0a0a;
       color: #00ffb3;
@@ -82,12 +75,10 @@
       box-shadow: 0 0 10px #00ffe0;
       width: 100%;
     }
-
     pre {
       white-space: pre-wrap;
       word-break: break-word;
     }
-
     .btn-custom {
       min-width: 180px;
       font-size: 16px;
@@ -99,13 +90,11 @@
       transition: all 0.3s ease-in-out;
       box-shadow: 0 0 12px #00ffe0;
     }
-
     .btn-custom:hover {
       background: #00d6b8;
       box-shadow: 0 0 15px #00ffee, 0 0 25px #00ffee;
       transform: scale(1.05);
     }
-
     .btn-group-custom {
       display: flex;
       gap: 20px;
@@ -114,50 +103,27 @@
       margin-top: 25px;
       margin-bottom: 30px;
     }
-
     footer {
       text-align: center;
       margin-top: 30px;
       color: #999;
       font-size: 13px;
     }
-
     ::selection {
       background: #00ffe0;
       color: #000;
     }
-
     a {
       color: #00ffee;
       text-decoration: underline;
       cursor: pointer;
     }
-
-    @media (max-width: 576px) {
-      .btn-custom {
-        width: 100%;
-      }
-
-      .container {
-        padding: 20px 15px;
-        margin: 40px 10px;
-      }
-
-      h2 {
-        font-size: 1.6rem;
-      }
-    }
-
     .hidden { display: none; }
 
-    .section-title.d-flex {
-      justify-content: space-between;
-      align-items: center;
-    }
-
-    .btn-sm {
-      padding: 5px 12px;
-      font-size: 13px;
+    @media (max-width: 576px) {
+      .btn-custom { width: 100%; }
+      .container { padding: 20px 15px; margin: 40px 10px; }
+      h2 { font-size: 1.6rem; }
     }
   </style>
 </head>
@@ -179,11 +145,10 @@
     </div>
 
     <div>
-      <div class="section-title d-flex">
-        📦 Encrypted JSON Payload
-        <button class="btn btn-sm btn-custom" onclick="copyText('encryptedOutput')">📋 Copy</button>
-      </div>
+      <div class="section-title">📦 Encrypted JSON Payload</div>
       <pre id="encryptedOutput">Waiting for encryption...</pre>
+      <div class="section-title">🔑 Private Key (Keep safe)</div>
+      <pre id="privateKeyOutput">Generated when encrypted</pre>
     </div>
   </div>
 
@@ -193,6 +158,9 @@
     <label class="form-label">📋 Encrypted JSON Message</label>
     <textarea id="pastedMessage" rows="8" placeholder="Paste encrypted message here..."></textarea>
 
+    <label class="form-label">🔐 Private Key (JWK format)</label>
+    <textarea id="pastedPrivateKey" rows="6" placeholder="Paste private key here..."></textarea>
+
     <div class="btn-group-custom">
       <button class="btn btn-custom" onclick="pasteAndDecrypt()">Decrypt</button>
       <button class="btn btn-custom" onclick="clearDecryptionFields()">Clear</button>
@@ -200,10 +168,7 @@
     </div>
 
     <div>
-      <div class="section-title d-flex">
-        📖 Decrypted Message
-        <button class="btn btn-sm btn-custom" onclick="copyText('decryptedPastedOutput')">📋 Copy</button>
-      </div>
+      <div class="section-title">📖 Decrypted Message</div>
       <pre id="decryptedPastedOutput">Waiting for decryption...</pre>
     </div>
   </div>
@@ -214,20 +179,7 @@
 </div>
 
 <script>
-let receiverKeys = null;
-
-(async () => {
-  receiverKeys = await crypto.subtle.generateKey(
-    {
-      name: "RSA-OAEP",
-      modulusLength: 4096,
-      publicExponent: new Uint8Array([1, 0, 1]),
-      hash: "SHA-256"
-    },
-    true,
-    ["encrypt", "decrypt"]
-  );
-})();
+let privateKey = null;
 
 function bufToB64(buf) {
   return btoa(String.fromCharCode(...new Uint8Array(buf)));
@@ -240,84 +192,85 @@ function b64ToBuf(b64) {
 function clearFields() {
   document.getElementById("message").value = "";
   document.getElementById("encryptedOutput").textContent = "Waiting for encryption...";
+  document.getElementById("privateKeyOutput").textContent = "Generated when encrypted";
 }
 
 function clearDecryptionFields() {
   document.getElementById("pastedMessage").value = "";
+  document.getElementById("pastedPrivateKey").value = "";
   document.getElementById("decryptedPastedOutput").textContent = "Waiting for decryption...";
 }
 
-function showPage(pageId) {
+function showPage(id) {
   document.getElementById("encryptPage").classList.add("hidden");
   document.getElementById("decryptPage").classList.add("hidden");
-  document.getElementById(pageId).classList.remove("hidden");
+  document.getElementById(id).classList.remove("hidden");
 }
 
 async function encryptAndSend() {
-  const message = document.getElementById("message").value;
-  if (!message) return alert("Enter a message first.");
+  const msg = document.getElementById("message").value;
+  if (!msg) return alert("Type a message first.");
 
-  const aesKey = await crypto.subtle.generateKey(
-    { name: "AES-GCM", length: 256 },
-    true,
-    ["encrypt", "decrypt"]
-  );
+  const rsaKeys = await crypto.subtle.generateKey({
+    name: "RSA-OAEP",
+    modulusLength: 4096,
+    publicExponent: new Uint8Array([1, 0, 1]),
+    hash: "SHA-256"
+  }, true, ["encrypt", "decrypt"]);
+
+  privateKey = rsaKeys.privateKey;
+
+  const pubKey = rsaKeys.publicKey;
+
+  const aesKey = await crypto.subtle.generateKey({ name: "AES-GCM", length: 256 }, true, ["encrypt", "decrypt"]);
   const iv = crypto.getRandomValues(new Uint8Array(12));
-  const encoded = new TextEncoder().encode(message);
-  const ciphertext = await crypto.subtle.encrypt({ name: "AES-GCM", iv }, aesKey, encoded);
+  const ciphertext = await crypto.subtle.encrypt({ name: "AES-GCM", iv }, aesKey, new TextEncoder().encode(msg));
   const rawKey = await crypto.subtle.exportKey("raw", aesKey);
-  const encryptedKey = await crypto.subtle.encrypt(
-    { name: "RSA-OAEP" },
-    receiverKeys.publicKey,
-    rawKey
-  );
+  const encryptedKey = await crypto.subtle.encrypt({ name: "RSA-OAEP" }, pubKey, rawKey);
 
-  const output = {
+  const privateJWK = await crypto.subtle.exportKey("jwk", privateKey);
+
+  const payload = {
     ciphertext: bufToB64(ciphertext),
     encryptedKey: bufToB64(encryptedKey),
     iv: bufToB64(iv)
   };
 
-  const outputString = JSON.stringify(output, null, 2);
-  document.getElementById("encryptedOutput").textContent = outputString;
+  const output = JSON.stringify(payload, null, 2);
+  const keyText = JSON.stringify(privateJWK, null, 2);
+
+  document.getElementById("encryptedOutput").textContent = output;
+  document.getElementById("privateKeyOutput").textContent = keyText;
 
   try {
-    await navigator.clipboard.writeText(outputString);
-    alert("✅ Encrypted message copied to clipboard!");
-  } catch (err) {
-    alert("❌ Failed to copy. Please copy manually.");
+    await navigator.clipboard.writeText(output);
+    alert("✅ Encrypted message copied!");
+  } catch (e) {
+    alert("❌ Could not copy. Please copy manually.");
   }
 }
 
 async function pasteAndDecrypt() {
-  const input = document.getElementById("pastedMessage").value;
   try {
-    const { ciphertext, encryptedKey, iv } = JSON.parse(input);
+    const json = JSON.parse(document.getElementById("pastedMessage").value);
+    const privateJWK = JSON.parse(document.getElementById("pastedPrivateKey").value);
+
+    const importedPriv = await crypto.subtle.importKey(
+      "jwk", privateJWK, { name: "RSA-OAEP", hash: "SHA-256" }, false, ["decrypt"]
+    );
+
     const rawKey = await crypto.subtle.decrypt(
-      { name: "RSA-OAEP" },
-      receiverKeys.privateKey,
-      b64ToBuf(encryptedKey)
+      { name: "RSA-OAEP" }, importedPriv, b64ToBuf(json.encryptedKey)
     );
-    const aesKey = await crypto.subtle.importKey("raw", rawKey, { name: "AES-GCM" }, true, ["decrypt"]);
-    const decrypted = await crypto.subtle.decrypt(
-      { name: "AES-GCM", iv: b64ToBuf(iv) },
-      aesKey,
-      b64ToBuf(ciphertext)
-    );
+
+    const aesKey = await crypto.subtle.importKey("raw", rawKey, { name: "AES-GCM" }, false, ["decrypt"]);
+    const decrypted = await crypto.subtle.decrypt({ name: "AES-GCM", iv: b64ToBuf(json.iv) }, aesKey, b64ToBuf(json.ciphertext));
+
     document.getElementById("decryptedPastedOutput").textContent = new TextDecoder().decode(decrypted);
   } catch (e) {
     console.error(e);
-    document.getElementById("decryptedPastedOutput").textContent = "❌ Decryption failed. Check the format.";
+    document.getElementById("decryptedPastedOutput").textContent = "❌ Decryption failed. Check the format or key.";
   }
-}
-
-function copyText(id) {
-  const content = document.getElementById(id).textContent;
-  navigator.clipboard.writeText(content).then(() => {
-    alert("✅ Copied to clipboard!");
-  }).catch(() => {
-    alert("❌ Failed to copy!");
-  });
 }
 
 const canvas = document.getElementById('bg');
