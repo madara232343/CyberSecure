@@ -1,7 +1,6 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
-  <meta name="google-site-verification" content="tgx5XOWqy0chzmAIJV4Lbrkp6kWSRAPK7voaClfmDYQ" />
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <title>CyberSecure Messenger</title>
@@ -183,6 +182,7 @@
 
     <div class="btn-group-custom">
       <button class="btn btn-custom" onclick="pasteAndDecrypt()">Decrypt</button>
+      <button class="btn btn-custom" onclick="clearDecryptionFields()">Clear</button>
       <a onclick="showPage('encryptPage')">🔁 Back to Encrypt</a>
     </div>
 
@@ -198,16 +198,7 @@
 </div>
 
 <script>
-let receiverKeys;
-
-(async () => {
-  receiverKeys = await crypto.subtle.generateKey({
-    name: "RSA-OAEP",
-    modulusLength: 4096,
-    publicExponent: new Uint8Array([1, 0, 1]),
-    hash: "SHA-256"
-  }, true, ["encrypt", "decrypt"]);
-})();
+let receiverKeys = {};
 
 function bufToB64(buf) {
   return btoa(String.fromCharCode(...new Uint8Array(buf)));
@@ -217,24 +208,58 @@ function b64ToBuf(b64) {
   return Uint8Array.from(atob(b64), c => c.charCodeAt(0));
 }
 
+async function generateKeys() {
+  receiverKeys = await crypto.subtle.generateKey({
+    name: "RSA-OAEP",
+    modulusLength: 4096,
+    publicExponent: new Uint8Array([1, 0, 1]),
+    hash: "SHA-256"
+  }, true, ["encrypt", "decrypt"]);
+  const pub = await crypto.subtle.exportKey("spki", receiverKeys.publicKey);
+  const priv = await crypto.subtle.exportKey("pkcs8", receiverKeys.privateKey);
+  localStorage.setItem("cybersecure_pub", bufToB64(pub));
+  localStorage.setItem("cybersecure_priv", bufToB64(priv));
+}
+
+async function loadKeys() {
+  const pub = localStorage.getItem("cybersecure_pub");
+  const priv = localStorage.getItem("cybersecure_priv");
+  if (!pub || !priv) {
+    await generateKeys();
+    return;
+  }
+  receiverKeys.publicKey = await crypto.subtle.importKey("spki", b64ToBuf(pub), { name: "RSA-OAEP", hash: "SHA-256" }, true, ["encrypt"]);
+  receiverKeys.privateKey = await crypto.subtle.importKey("pkcs8", b64ToBuf(priv), { name: "RSA-OAEP", hash: "SHA-256" }, true, ["decrypt"]);
+}
+
+loadKeys();
+
+function clearFields() {
+  document.getElementById("message").value = "";
+  document.getElementById("encryptedOutput").textContent = "Waiting for encryption...";
+}
+
+function clearDecryptionFields() {
+  document.getElementById("pastedMessage").value = "";
+  document.getElementById("decryptedPastedOutput").textContent = "Waiting for decryption...";
+}
+
+function showPage(pageId) {
+  document.getElementById("encryptPage").classList.add("hidden");
+  document.getElementById("decryptPage").classList.add("hidden");
+  document.getElementById(pageId).classList.remove("hidden");
+}
+
 async function encryptAndSend() {
   const message = document.getElementById("message").value;
   if (!message) return alert("Enter a message first.");
 
-  const aesKey = await crypto.subtle.generateKey(
-    { name: "AES-GCM", length: 256 },
-    true,
-    ["encrypt", "decrypt"]
-  );
+  const aesKey = await crypto.subtle.generateKey({ name: "AES-GCM", length: 256 }, true, ["encrypt", "decrypt"]);
   const iv = crypto.getRandomValues(new Uint8Array(12));
   const encoded = new TextEncoder().encode(message);
   const ciphertext = await crypto.subtle.encrypt({ name: "AES-GCM", iv }, aesKey, encoded);
   const rawKey = await crypto.subtle.exportKey("raw", aesKey);
-  const encryptedKey = await crypto.subtle.encrypt(
-    { name: "RSA-OAEP" },
-    receiverKeys.publicKey,
-    rawKey
-  );
+  const encryptedKey = await crypto.subtle.encrypt({ name: "RSA-OAEP" }, receiverKeys.publicKey, rawKey);
 
   const output = {
     ciphertext: bufToB64(ciphertext),
@@ -245,44 +270,28 @@ async function encryptAndSend() {
   const outputString = JSON.stringify(output, null, 2);
   document.getElementById("encryptedOutput").textContent = outputString;
 
-  navigator.clipboard.writeText(outputString).then(() => {
-    alert("Encrypted message copied to clipboard!");
-  });
+  try {
+    await navigator.clipboard.writeText(outputString);
+    alert("✅ Encrypted message copied to clipboard!");
+  } catch (err) {
+    alert("❌ Failed to copy. Please copy manually.");
+  }
 }
 
 async function pasteAndDecrypt() {
   const input = document.getElementById("pastedMessage").value;
   try {
     const { ciphertext, encryptedKey, iv } = JSON.parse(input);
-    const rawKey = await crypto.subtle.decrypt(
-      { name: "RSA-OAEP" },
-      receiverKeys.privateKey,
-      b64ToBuf(encryptedKey)
-    );
+    const rawKey = await crypto.subtle.decrypt({ name: "RSA-OAEP" }, receiverKeys.privateKey, b64ToBuf(encryptedKey));
     const aesKey = await crypto.subtle.importKey("raw", rawKey, { name: "AES-GCM" }, true, ["decrypt"]);
-    const decrypted = await crypto.subtle.decrypt(
-      { name: "AES-GCM", iv: b64ToBuf(iv) },
-      aesKey,
-      b64ToBuf(ciphertext)
-    );
+    const decrypted = await crypto.subtle.decrypt({ name: "AES-GCM", iv: b64ToBuf(iv) }, aesKey, b64ToBuf(ciphertext));
     document.getElementById("decryptedPastedOutput").textContent = new TextDecoder().decode(decrypted);
   } catch (e) {
+    console.error(e);
     document.getElementById("decryptedPastedOutput").textContent = "❌ Decryption failed. Check the format.";
   }
 }
 
-function clearFields() {
-  document.getElementById("message").value = "";
-  document.getElementById("encryptedOutput").textContent = "Waiting for encryption...";
-}
-
-function showPage(pageId) {
-  document.getElementById("encryptPage").classList.add("hidden");
-  document.getElementById("decryptPage").classList.add("hidden");
-  document.getElementById(pageId).classList.remove("hidden");
-}
-
-// === Background animation ===
 const canvas = document.getElementById('bg');
 const ctx = canvas.getContext('2d');
 canvas.width = window.innerWidth;
@@ -313,6 +322,7 @@ function animate() {
   }
   requestAnimationFrame(animate);
 }
+
 animate();
 
 window.addEventListener("resize", () => {
